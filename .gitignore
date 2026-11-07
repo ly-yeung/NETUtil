@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# NuGet packages produced by pack
+*.nupkg
+*.snupkg
+
+# Test results and coverage
+TestResults/
+*.trx
+coverage*.xml
+coverage*.json
+
+# IDE and user settings
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# OS junk
+.DS_Store
+Thumbs.db

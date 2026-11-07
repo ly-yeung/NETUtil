@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+<TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <PackageId>NETUtil</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Yeung</Authors>
+    <Description>Common .NET tools and helpers</Description>
+    <PackageTags>utils;helper</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <!-- net8.0 自带 System.Text.Json；只有 netstandard2.0 目标需要显式引用，避免 net8.0 目标引入重复程序集 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>
