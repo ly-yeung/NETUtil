@@ -9,7 +9,11 @@ validation, JSON detection, number formatting, and small object utilities.
 
 ## Installation
 
-The package is not published to nuget.org yet. Build it locally and consume the
+```bash
+dotnet add package CSharpUtil.Extensions
+```
+
+To consume an unreleased build instead, pack locally and point the restore at the
 produced `.nupkg`:
 
 ```bash
