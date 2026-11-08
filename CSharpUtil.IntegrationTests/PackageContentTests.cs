@@ -59,4 +59,37 @@ public class PackageContentTests
         Assert.Contains("Newtonsoft.Json", groups[netStandardKey]);
         Assert.Contains("System.Text.Json", groups[netStandardKey]);
     }
+
+    [Fact]
+    public void Package_CarriesPublishMetadataForNuGetOrg()
+    {
+        using ZipArchive package = ZipFile.OpenRead(PackageUnderTest.Instance.PackagePath);
+        string[] entries = package.Entries.Select(entry => entry.FullName).ToArray();
+
+        // nuget.org renders the README and license on the package page, but only when the files
+        // referenced by <PackageReadmeFile> / the license are actually packed.
+        Assert.Contains("README.md", entries);
+        Assert.Contains("LICENSE", entries);
+
+        ZipArchiveEntry nuspecEntry = package.Entries.Single(entry => entry.FullName.EndsWith(".nuspec"));
+        using Stream stream = nuspecEntry.Open();
+        XDocument nuspec = XDocument.Load(stream);
+        XNamespace ns = nuspec.Root!.Name.Namespace;
+        XElement metadata = nuspec.Root!.Element(ns + "metadata")!;
+
+        // The id and version here are what nuget.org records permanently, so they must match the
+        // values the integration tests resolve the package from.
+        Assert.Equal(PackageUnderTest.Instance.PackageId, metadata.Element(ns + "id")!.Value);
+        Assert.Equal(PackageUnderTest.Instance.Version, metadata.Element(ns + "version")!.Value);
+        // <license type="expression">MIT</license>: the type says the value is an SPDX expression.
+        XElement license = metadata.Element(ns + "license")!;
+        Assert.Equal("expression", license.Attribute("type")!.Value);
+        Assert.Equal("MIT", license.Value);
+        Assert.Equal("README.md", metadata.Element(ns + "readme")!.Value);
+        Assert.Equal("https://github.com/ly-yeung/NETUtil", metadata.Element(ns + "projectUrl")!.Value);
+
+        XElement repository = metadata.Element(ns + "repository")!;
+        Assert.Equal("git", repository.Attribute("type")!.Value);
+        Assert.Equal("https://github.com/ly-yeung/NETUtil", repository.Attribute("url")!.Value);
+    }
 }

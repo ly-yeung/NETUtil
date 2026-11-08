@@ -2,12 +2,17 @@
 
   <PropertyGroup>
 <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
-    <PackageId>NETUtil</PackageId>
+    <PackageId>CSharpUtil</PackageId>
     <Version>0.1.0</Version>
     <Authors>Yeung</Authors>
     <Description>Common .NET tools and helpers</Description>
     <PackageTags>utils;helper</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ly-yeung/NETUtil</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ly-yeung/NETUtil</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial release: string/number/object extension helpers, culture-invariant parsing, two-layer JSON detection.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -15,6 +20,12 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <!-- Ship the repository README inside the package so nuget.org renders it on the package page. -->
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- net8.0 自带 System.Text.Json；只有 netstandard2.0 目标需要显式引用，避免 net8.0 目标引入重复程序集 -->

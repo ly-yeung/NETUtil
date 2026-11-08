@@ -24,7 +24,7 @@ internal sealed class PackageUnderTest
 
     public string PackagePath { get; }
 
-    public string PackageId { get; } = "NETUtil";
+    public string PackageId { get; } = "CSharpUtil";
 
     public string Version { get; }
 
