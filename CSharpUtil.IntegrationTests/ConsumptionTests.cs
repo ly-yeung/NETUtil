@@ -42,7 +42,7 @@ public class ConsumptionTests
 
         // The build only proves assets resolved; also confirm the package (and not a project reference) was used.
         string assets = File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json"));
-        Assert.Contains("CSharpUtil", assets);
+        Assert.Contains("CSharpUtil.Extensions", assets);
         Assert.Contains("netstandard2.0", assets);
     }
 

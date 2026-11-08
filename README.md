@@ -5,7 +5,7 @@ validation, JSON detection, number formatting, and small object utilities.
 
 - Targets `net8.0` and `netstandard2.0`
 - XML documentation and symbol package included (`IncludeSymbols`, `snupkg`)
-- Package id `CSharpUtil`, current version `0.1.0`
+- Package id `CSharpUtil.Extensions`, current version `0.1.0`
 
 ## Installation
 
@@ -14,11 +14,11 @@ produced `.nupkg`:
 
 ```bash
 dotnet pack CSharpUtil/CSharpUtil.csproj -c Release -o artifacts
-dotnet add package CSharpUtil --source ./artifacts
+dotnet add package CSharpUtil.Extensions --source ./artifacts
 ```
 
 > Repacking the same version and restoring again will silently use the cached copy
-> in `%NUGET_PACKAGES%\csharputil\<version>`. Delete that folder when you need the new
+> in `%NUGET_PACKAGES%\csharputil.extensions\<version>`. Delete that folder when you need the new
 > build to be picked up.
 
 ## Quick start
