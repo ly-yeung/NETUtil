@@ -4,12 +4,33 @@ using System.Globalization;
 namespace CSharpUtil.DateTimeUtil
 {
     /// <summary>
+    /// Resolution of the fourth part of a <see cref="Version"/> built by ToVersion. The first three parts are always
+    /// year, month and day; the fourth counts whole units since midnight, so a finer precision distinguishes more
+    /// instants inside the same day.
+    /// </summary>
+    public enum VersionPrecision
+    {
+        /// <summary>Fourth part is the hour (0-23). 24 distinct values per day.</summary>
+        Hour = 0,
+
+        /// <summary>Fourth part is the minute of the day (0-1439).</summary>
+        Minute = 1,
+
+        /// <summary>Fourth part is the second of the day (0-86399). This is the default.</summary>
+        Second = 2,
+
+        /// <summary>Fourth part is the millisecond of the day (0-86399999).</summary>
+        Millisecond = 3
+    }
+
+    /// <summary>
     /// Timestamp conversion, day boundaries and a version-style encoding of an instant.
     /// </summary>
     public static class DateTimeUtil
     {
         private const long TicksPerSecond = 10000000L;
         private const long TicksPerMillisecond = 10000L;
+        private const long TicksPerDay = 864000000000L;
 
         // 1970-01-01T00:00:00Z in DateTime ticks. Kept as a constant so no DateTimeOffset is constructed per call.
         private const long UnixEpochTicks = 621355968000000000L;
@@ -114,30 +135,42 @@ namespace CSharpUtil.DateTimeUtil
         }
 
         /// <summary>
-        /// Encodes the instant as a four-part Version (year, month, day, seconds within the day). Version.CompareTo
-        /// orders these the same way the instants are ordered, which makes the value handy for cache keys, build
-        /// numbers and audit labels. Resolution is one second. For concurrency comparisons use ToVersionStamp.
+        /// Encodes the instant as a four-part Version (year, month, day, units within the day taken at
+        /// <paramref name="precision"/>). Version.CompareTo orders these the same way the instants are ordered,
+        /// which makes the value handy for cache keys, build numbers and audit labels. Only the fourth part
+        /// carries the time, so two instants closer together than the precision compare as equal - use
+        /// ToVersionStamp when order must survive to the tick.
         /// </summary>
-        public static Version ToVersion(this DateTime value)
+        /// <param name="value">Instant to encode.</param>
+        /// <param name="precision">Resolution of the fourth part; one second by default.</param>
+        public static Version ToVersion(this DateTime value, VersionPrecision precision = VersionPrecision.Second)
         {
-            return new Version(value.Year, value.Month, value.Day, (int)(value.TimeOfDay.Ticks / TicksPerSecond));
+            return new Version(value.Year, value.Month, value.Day, (int)(value.TimeOfDay.Ticks / TicksForPrecision(precision)));
         }
 
         /// <summary>
-        /// Reverses <see cref="ToVersion"/>; null when the parts cannot form a valid date (month 13, or a Version
-        /// that carries fewer than four parts).
+        /// Reverses <see cref="ToVersion"/>; null when the parts cannot form a valid date (month 13, a fourth part
+        /// outside the range the precision allows, or a Version that carries fewer than four parts). Pass the same
+        /// precision that built the Version.
         /// </summary>
-        public static DateTime? ToDateTime(this Version version)
+        /// <param name="version">Encoded instant.</param>
+        /// <param name="precision">Resolution used when the Version was built; one second by default.</param>
+        public static DateTime? ToDateTime(this Version version, VersionPrecision precision = VersionPrecision.Second)
         {
-            if (version == null || version.Revision < 0 || version.Revision >= 86400)
+            if (version == null)
+            {
+                return null;
+            }
+
+            long unitTicks = TicksForPrecision(precision);
+            if (version.Revision < 0 || version.Revision >= TicksPerDay / unitTicks)
             {
                 return null;
             }
 
             try
             {
-                return new DateTime(version.Major, version.Minor, version.Build)
-                    .AddSeconds(version.Revision);
+                return new DateTime(version.Major, version.Minor, version.Build).AddTicks(version.Revision * unitTicks);
             }
             catch (ArgumentOutOfRangeException)
             {
@@ -153,6 +186,23 @@ namespace CSharpUtil.DateTimeUtil
         public static long ToVersionStamp(this DateTime value)
         {
             return value.Ticks;
+        }
+
+        private static long TicksForPrecision(VersionPrecision precision)
+        {
+            switch (precision)
+            {
+                case VersionPrecision.Hour:
+                    return TimeSpan.TicksPerHour;
+                case VersionPrecision.Minute:
+                    return TimeSpan.TicksPerMinute;
+                case VersionPrecision.Millisecond:
+                    return TicksPerMillisecond;
+                case VersionPrecision.Second:
+                    return TicksPerSecond;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(precision), precision, "Unknown version precision.");
+            }
         }
 
         private static DateTime FromUnixValue(long value, long ticksPerUnit, string unitName)

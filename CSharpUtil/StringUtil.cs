@@ -672,6 +672,45 @@ namespace CSharpUtil.StringUtil
         }
 
         /// <summary>
+        /// Returns the string unchanged when it is at most <paramref name="maxLength"/> characters, otherwise
+        /// throws ArgumentOutOfRangeException. Null passes, so an optional field keeps one responsibility per
+        /// method: presence is checked by <see cref="EnsureNotEmpty"/> or <see cref="IsNullOrWhiteSpace"/>.
+        /// </summary>
+        /// <param name="value">Text to check.</param>
+        /// <param name="maxLength">Inclusive upper bound.</param>
+        /// <param name="paramName">Argument name reported in the exception; set it with nameof at the call site.</param>
+        public static string EnsureMaxLength(this string value, int maxLength, string paramName = "value")
+        {
+            if (maxLength < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxLength), maxLength, "The length limit must not be negative.");
+            }
+
+            if (value == null || value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            throw new ArgumentOutOfRangeException(paramName, "Length " + value.Length + " exceeds the limit of " + maxLength + ".");
+        }
+
+        /// <summary>
+        /// Returns the string unchanged when it carries content, otherwise throws ArgumentException. White space
+        /// counts as missing, so a required field never ends up holding "   ".
+        /// </summary>
+        /// <param name="value">Text to check.</param>
+        /// <param name="paramName">Argument name reported in the exception; set it with nameof at the call site.</param>
+        public static string EnsureNotEmpty(this string value, string paramName = "value")
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("The value must not be null, empty or white space.", paramName);
+            }
+
+            return value;
+        }
+
+        /// <summary>
         /// True when the string is null, empty or only white space.
         /// </summary>
         public static bool IsNullOrWhiteSpace(this string value)

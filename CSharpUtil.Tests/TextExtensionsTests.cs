@@ -195,4 +195,48 @@ public class TextExtensionsTests
         Assert.Null("abcde".FromBase64Url());
         Assert.Null("!!!!".FromBase64Url());
     }
+
+    // ------------------------------------------------------------------
+    // EnsureMaxLength / EnsureNotEmpty
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void EnsureMaxLength_ReturnsTheValueWhenItFits()
+    {
+        Assert.Equal("abcd", "abcd".EnsureMaxLength(4));
+        Assert.Equal("abc", "abc".EnsureMaxLength(10));
+        Assert.Null(((string?)null).EnsureMaxLength(3));
+        Assert.Equal(string.Empty, string.Empty.EnsureMaxLength(0));
+    }
+
+    [Fact]
+    public void EnsureMaxLength_ThrowsWithTheLengthInTheMessage()
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(
+            () => "abcdef".EnsureMaxLength(3, nameof(error)));
+        Assert.Contains("6", error.Message);
+        Assert.Contains("3", error.Message);
+        Assert.Null(error.ActualValue);
+    }
+
+    [Fact]
+    public void EnsureMaxLength_RejectsNegativeLimit()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => "abc".EnsureMaxLength(-1));
+    }
+
+    [Fact]
+    public void EnsureNotEmpty_ReturnsTheValueWhenItCarriesContent()
+    {
+        Assert.Equal("a", "a".EnsureNotEmpty());
+        Assert.Equal(" a ", " a ".EnsureNotEmpty());
+    }
+
+    [Fact]
+    public void EnsureNotEmpty_RejectsNullEmptyAndBlank()
+    {
+        Assert.Throws<ArgumentException>(() => ((string?)null).EnsureNotEmpty());
+        Assert.Throws<ArgumentException>(() => string.Empty.EnsureNotEmpty("title"));
+        Assert.Throws<ArgumentException>(() => "  ".EnsureNotEmpty("title"));
+    }
 }

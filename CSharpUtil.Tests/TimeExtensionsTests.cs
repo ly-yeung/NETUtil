@@ -155,4 +155,77 @@ public class TimeExtensionsTests
         // One tick apart is still ordered correctly, unlike a Version which stops at whole seconds.
         Assert.True(a.ToVersionStamp() < b.ToVersionStamp());
     }
+
+    [Theory]
+    [InlineData(VersionPrecision.Hour, 13)]
+    [InlineData(VersionPrecision.Minute, 825)]
+    [InlineData(VersionPrecision.Second, 49559)]
+    [InlineData(VersionPrecision.Millisecond, 49559123)]
+    public void ToVersion_HonoursPrecision(VersionPrecision precision, int expectedRevision)
+    {
+        DateTime sample = new(2026, 11, 26, 13, 45, 59, 123);
+        Version version = sample.ToVersion(precision);
+
+        Assert.Equal(2026, version.Major);
+        Assert.Equal(11, version.Minor);
+        Assert.Equal(26, version.Build);
+        Assert.Equal(expectedRevision, version.Revision);
+    }
+
+    [Theory]
+    [InlineData(VersionPrecision.Hour)]
+    [InlineData(VersionPrecision.Minute)]
+    [InlineData(VersionPrecision.Second)]
+    [InlineData(VersionPrecision.Millisecond)]
+    public void ToVersion_RoundTripsAtEveryPrecision(VersionPrecision precision)
+    {
+        DateTime sample = new(2026, 11, 26, 13, 45, 59, 123);
+        DateTime expected = TruncateTo(sample, precision);
+
+        Assert.Equal(expected, sample.ToVersion(precision).ToDateTime(precision));
+    }
+
+    [Fact]
+    public void ToVersion_CoarsePrecisionCollapsesNearbyInstants()
+    {
+        DateTime first = new(2026, 11, 26, 13, 45, 1);
+        DateTime second = new(2026, 11, 26, 13, 45, 31);
+
+        // 30 seconds apart: equal at minute and hour precision, ordered at second precision.
+        Assert.Equal(first.ToVersion(VersionPrecision.Minute), second.ToVersion(VersionPrecision.Minute));
+        Assert.Equal(first.ToVersion(VersionPrecision.Hour), second.ToVersion(VersionPrecision.Hour));
+        Assert.True(first.ToVersion(VersionPrecision.Second).CompareTo(second.ToVersion(VersionPrecision.Second)) < 0);
+    }
+
+    [Fact]
+    public void ToDateTime_RejectsRevisionOutsidePrecisionRange()
+    {
+        Assert.Null(new Version(2026, 1, 1, 24).ToDateTime(VersionPrecision.Hour));
+        Assert.Null(new Version(2026, 1, 1, 1440).ToDateTime(VersionPrecision.Minute));
+        Assert.Null(new Version(2026, 1, 1, 86400).ToDateTime(VersionPrecision.Second));
+        Assert.Null(new Version(2026, 1, 1, 86400000).ToDateTime(VersionPrecision.Millisecond));
+
+        Assert.Equal(new DateTime(2026, 1, 1, 23, 0, 0), new Version(2026, 1, 1, 23).ToDateTime(VersionPrecision.Hour));
+    }
+
+    [Fact]
+    public void ToVersion_RejectsUndefinedPrecision()
+    {
+        DateTime sample = new(2026, 11, 26);
+        Assert.Throws<ArgumentOutOfRangeException>(() => sample.ToVersion((VersionPrecision)99));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Version(2026, 11, 26, 0).ToDateTime((VersionPrecision)99));
+    }
+
+    private static DateTime TruncateTo(DateTime value, VersionPrecision precision)
+    {
+        long unit = precision switch
+        {
+            VersionPrecision.Hour => TimeSpan.TicksPerHour,
+            VersionPrecision.Minute => TimeSpan.TicksPerMinute,
+            VersionPrecision.Millisecond => TimeSpan.TicksPerMillisecond,
+            _ => TimeSpan.TicksPerSecond
+        };
+
+        return new DateTime(value.Ticks - value.Ticks % unit, value.Kind);
+    }
 }

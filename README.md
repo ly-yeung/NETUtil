@@ -76,6 +76,7 @@ comes with the core package.
 | Predicates | `IsNumber`, `IsInteger`, `IsShort`, `IsLong`, `IsFloat`, `IsDouble`, `IsDecimal`, `IsBool`, `IsDateTime`, `IsGuid`, `IsEnum<T>` |
 | Deserialization *(JSON package)* | `ConvertTo<T>`, `TryConvertTo<T>` |
 | Blank checks | `IsNullOrWhiteSpace`, `IsNullOrEmpty`, `EmptyIfNull` |
+| Guards | `EnsureMaxLength` (return or throw), `EnsureNotEmpty` (return or throw) |
 | String cleanup | `TrimToNull`, `DefaultIfBlank`, `NormalizeSpace`, `SplitTrim`, `Truncate`, `JoinNonEmpty` |
 | Cutting | `CutBefore`, `CutAfter` (string and char overloads) |
 | Encoding | `ToUtf8Bytes`, `FromUtf8Bytes`, `ToBase64`, `ToBase64Url`, `FromBase64`, `FromBase64Url` |
@@ -159,8 +160,12 @@ foreach (string item in names.OrEmpty().Where(name => name.Length > 2))
 | `IsUnixTimestamp()` / `ToTimestamp()` | Text form: exactly 10 digits (seconds) or 13 digits (milliseconds), anything else returns `null` |
 | `StartOfDay()` / `EndOfDay()` | Midnight, and the last tick of the day (`23:59:59.9999999`) so `BETWEEN` filters include the whole day |
 | `IsBetween(min, max)` | Inclusive on both ends |
-| `ToVersion()` / `ToDateTime(Version)` | Encode an instant as `Version(year, month, day, secondsOfDay)` and read it back; second precision |
+| `ToVersion(precision)` / `ToDateTime(Version, precision)` | Encode an instant as `Version(year, month, day, unitsOfDay)` and read it back; `VersionPrecision` picks hour, minute, second (default) or millisecond |
 | `ToVersionStamp()` | `Ticks` — the value to compare for "is this newer than mine" |
+
+`ToDateTime(Version)` must be given the same `VersionPrecision` that built the value: the fourth
+part means "hours since midnight" at hour precision but "milliseconds since midnight" at
+millisecond precision, so mixing them silently shifts the result.
 
 `ToTimestamp` deliberately refuses short digit strings: accepting any number would turn `"2024"`
 (a year) or an 8-digit legacy id into a plausible-looking date near 1970.
@@ -239,10 +244,23 @@ is `Is*` returns `true` ⇒ the matching `To*` returns the parsed value.
 
 ### Timestamps, and Version versus VersionStamp
 
-`ToVersion()` packs an instant into `Version(year, month, day, secondsOfDay)`. `Version.CompareTo`
+`ToVersion()` packs an instant into `Version(year, month, day, unitsOfDay)`. `Version.CompareTo`
 orders those the same way the instants are ordered, which makes the value usable as a cache key,
-build number or audit label. It stops at one second, so two writes inside the same second compare
-as equal — do not use it as a concurrency token.
+build number or audit label. The fourth part counts whole units since midnight, and
+`VersionPrecision` chooses the unit:
+
+| Precision | Fourth part | Distinct values per day | Two instants 30 s apart |
+| --- | --- | --- | --- |
+| `Hour` | hours since midnight | 24 | equal |
+| `Minute` | minutes since midnight | 1,440 | equal |
+| `Second` *(default)* | seconds since midnight | 86,400 | ordered |
+| `Millisecond` | milliseconds since midnight | 86,400,000 | ordered |
+
+Coarser precision buys a smaller range, not more order: anything below the chosen unit collapses
+into the same `Version`. Even at millisecond precision this is a sortable label, not a concurrency
+token — two writes inside the same millisecond compare as equal. Reading a value back needs the
+same precision that produced it, and `ToDateTime` returns `null` when the fourth part is outside
+the range the precision allows (24 hours, 1,440 minutes, 86,400 seconds, 86,400,000 milliseconds).
 
 For "is this row newer than mine", use `ToVersionStamp()`: it returns `DateTime.Ticks`, which keeps
 100-nanosecond resolution and compares with a single operator. It is still wall clock, so keep the
