@@ -4,7 +4,7 @@
     <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
     <PackageId>CSharpUtil.Extensions.Json</PackageId>
     <!-- Kept in lockstep with CSharpUtil.Extensions: this package depends on that exact version. -->
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Yeung</Authors>
     <Description>JSON helpers for CSharpUtil.Extensions: shape checks, strict System.Text.Json validation (string and UTF-8 bytes) and Newtonsoft based object deserialization. Ships the CSharpUtil.StringUtil namespace, so existing using directives keep working.</Description>
     <PackageTags>json;json-validation;deserialize;utils;extensions</PackageTags>
@@ -13,7 +13,7 @@
     <RepositoryUrl>https://github.com/ly-yeung/NETUtil</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Split out of CSharpUtil.Extensions so the core package can stay dependency-free: IsLikeJsonObject/IsLikeJsonArray, IsValidJsonObject/IsValidJsonArray (string and UTF-8 overloads) and ConvertTo&lt;T&gt;/TryConvertTo&lt;T&gt; live here. Namespace unchanged; add this package only when JSON helpers are needed.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0 keeps the JSON helpers unchanged and bumps the dependency to CSharpUtil.Extensions 0.3.0 so both packages stay in lockstep. The new 0.3.0 core helpers (null-safe checks, text cleanup, encodings, timestamps) are available simply by upgrading this package.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

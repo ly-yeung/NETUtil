@@ -9,7 +9,7 @@ utilities. JSON helpers ship as a separate companion package.
 - `CSharpUtil.Extensions` — core helpers, **no third-party dependency**
 - `CSharpUtil.Extensions.Json` — JSON helpers, depends on the core package plus
   Newtonsoft.Json and (on `netstandard2.0`) System.Text.Json
-- Current version `0.2.0` for both
+- Current version `0.3.0` for both
 
 ## Installation
 
@@ -42,10 +42,14 @@ Every helper is an extension method on `string`, `long`, `decimal` or `object`,
 so the `using` directives import the class under which the method lives:
 
 ```csharp
-using CSharpUtil.StringUtil;    // string helpers
-using CSharpUtil.NumberUtil;    // long / decimal helpers
-using CSharpUtil.ObjectUtil;    // object helpers
-using CSharpUtil.FileUtil;      // path / file name helpers
+using CSharpUtil.StringUtil;      // string helpers
+using CSharpUtil.NumberUtil;      // long / decimal helpers
+using CSharpUtil.ObjectUtil;      // object helpers
+using CSharpUtil.FileUtil;        // path / file name helpers
+using CSharpUtil.CollectionUtil;  // null-safe sequence helpers
+using CSharpUtil.DateTimeUtil;    // timestamps and day boundaries
+using CSharpUtil.GuidUtil;        // compact GUIDs
+using CSharpUtil.EnumUtil;        // [Description] lookup
 
 int count = "42".ToInt();                       // 42
 string masked = "13800138000".MaskMobile();     // 138****8000
@@ -53,6 +57,10 @@ bool isJson = payload.IsValidJsonObject();      // strict, System.Text.Json rule
 string size = 1048575L.FormatFileSize();        // "1.00 MB"
 string ext = @"C:\docs\Report.PDF".GetExtension();       // ".pdf"
 string type = "photo.png".GetContentType();              // "image/png"
+string normalized = "  a  b ".NormalizeSpace();          // "a b"
+string percent = 0.1234m.ToPercent();                    // "12.3%"
+long stamp = DateTime.UtcNow.ToUnixSeconds();            // Unix seconds
+string shortId = Guid.NewGuid().ToShortString();         // 22 characters
 ```
 
 Members marked *JSON package* live in `CSharpUtil.Extensions.Json`; everything else
@@ -67,7 +75,10 @@ comes with the core package.
 | Conversion | `ToInt`, `ToShort`, `ToLong`, `ToDouble`, `ToFloat`, `ToDecimal`, `ToBool`, `ToDateTime`, `ToGuid`, `ToTimeSpan`, `ToEnum<T>` |
 | Predicates | `IsNumber`, `IsInteger`, `IsShort`, `IsLong`, `IsFloat`, `IsDouble`, `IsDecimal`, `IsBool`, `IsDateTime`, `IsGuid`, `IsEnum<T>` |
 | Deserialization *(JSON package)* | `ConvertTo<T>`, `TryConvertTo<T>` |
-| String cleanup | `TrimToNull`, `DefaultIfBlank`, `SplitTrim`, `Truncate` |
+| Blank checks | `IsNullOrWhiteSpace`, `IsNullOrEmpty`, `EmptyIfNull` |
+| String cleanup | `TrimToNull`, `DefaultIfBlank`, `NormalizeSpace`, `SplitTrim`, `Truncate`, `JoinNonEmpty` |
+| Cutting | `CutBefore`, `CutAfter` (string and char overloads) |
+| Encoding | `ToUtf8Bytes`, `FromUtf8Bytes`, `ToBase64`, `ToBase64Url`, `FromBase64`, `FromBase64Url` |
 | Masking | `Mask`, `MaskMobile`, `MaskIdCard`, `MaskEmail` |
 | JSON detection *(JSON package)* | `IsLikeJsonObject`, `IsLikeJsonArray`, `IsValidJsonObject`, `IsValidJsonArray` |
 
@@ -89,6 +100,9 @@ int? maybe = "abc".ToInt((int?)null); // null
 | `FormatFileSize(long bytes, int decimals = 2, SizeUnit maxUnit = PB)` | Base-1024 human readable size (`B` / `KB` / `MB` / `GB` / `TB` / `PB`), carries at boundaries, capped by `maxUnit` |
 | `ToChineseRmb(decimal amount)` | Chinese uppercase RMB amount (`1234.56m` → `壹仟贰佰叁拾肆元伍角陆分`) |
 | `RoundTo(decimal value, int digits, MidpointRounding mode = AwayFromZero)` | Decimal rounding with an explicit midpoint mode |
+| `Clamp(value, min, max)` | int / long / decimal / double range clamp; fills the `decimal` gap and the `netstandard2.0` gap that `Math.Clamp` leaves |
+| `SafeDivide(value, divisor, fallback = 0m)` | Division that returns the fallback instead of throwing on a zero divisor |
+| `ToPercent(decimals = 1)` | Invariant percentage text (`0.1234m` → `"12.3%"`) |
 
 `FormatFileSize` promotes the unit when rounding reaches the next boundary
 (`1048575` → `1.00 MB` instead of `1024.00 KB`). Pass a `SizeUnit` to cap it, e.g. for a
@@ -119,6 +133,53 @@ the Windows convention, not the strict SI/IEC meaning of 1000.
 | `As<T>()` | Same cast returning `null` instead of throwing; same reference, no copy |
 | `IsDefault<T>()` | Default-value check (`0`, `false`, `null`, empty struct value) |
 | `Coalesce<T>(T fallback)` | Fallback for `null` |
+
+### `CSharpUtil.CollectionUtil`
+
+| Member | Description |
+| --- | --- |
+| `OrEmpty<T>()` | The sequence itself, or `Enumerable.Empty<T>()` when null; returns the original instance, no wrapper, no copy |
+| `IsNullOrEmpty<T>()` | Null-or-no-element check for `IReadOnlyCollection<T>`; only countable collections are accepted so nothing is enumerated twice |
+
+`OrEmpty` exists to delete a null check from the caller, not to hide one:
+
+```csharp
+foreach (string item in names.OrEmpty().Where(name => name.Length > 2))
+{
+    // no separate if (names != null)
+}
+```
+
+### `CSharpUtil.DateTimeUtil`
+
+| Member | Description |
+| --- | --- |
+| `ToUnixSeconds()` / `ToUnixMilliseconds()` | Convert to Unix time; `Unspecified` kinds are treated as local, which is what `ToUniversalTime` already assumes |
+| `FromUnixSeconds()` / `FromUnixMilliseconds()` | Build a UTC `DateTime`; out-of-range values throw `ArgumentOutOfRangeException` instead of wrapping around |
+| `IsUnixTimestamp()` / `ToTimestamp()` | Text form: exactly 10 digits (seconds) or 13 digits (milliseconds), anything else returns `null` |
+| `StartOfDay()` / `EndOfDay()` | Midnight, and the last tick of the day (`23:59:59.9999999`) so `BETWEEN` filters include the whole day |
+| `IsBetween(min, max)` | Inclusive on both ends |
+| `ToVersion()` / `ToDateTime(Version)` | Encode an instant as `Version(year, month, day, secondsOfDay)` and read it back; second precision |
+| `ToVersionStamp()` | `Ticks` — the value to compare for "is this newer than mine" |
+
+`ToTimestamp` deliberately refuses short digit strings: accepting any number would turn `"2024"`
+(a year) or an 8-digit legacy id into a plausible-looking date near 1970.
+
+### `CSharpUtil.GuidUtil`
+
+| Member | Description |
+| --- | --- |
+| `ToShortString()` | 22 URL-safe Base64 characters instead of the 36-character canonical form |
+| `ParseShortString()` | Reads it back; wrong length or illegal characters return `null` |
+
+The bytes come from `Guid.ToByteArray`, so the compact form is this library's own encoding —
+other tools read it as an opaque token.
+
+### `CSharpUtil.EnumUtil`
+
+| Member | Description |
+| --- | --- |
+| `GetDescription<T>()` | The `[Description]` text, or the member name when the attribute is missing; cached per enum type, so reflection runs only on the first call per value |
 
 ### `CSharpUtil.FileUtil`
 
@@ -175,6 +236,17 @@ Trade-off: culture-specific literals are rejected by design. `"1.234,5"` and
 Non-finite values are excluded everywhere: `"1e400"` overflows to `Infinity`,
 so `IsDouble` is `false` and `ToDouble` falls back to the default. The invariant
 is `Is*` returns `true` ⇒ the matching `To*` returns the parsed value.
+
+### Timestamps, and Version versus VersionStamp
+
+`ToVersion()` packs an instant into `Version(year, month, day, secondsOfDay)`. `Version.CompareTo`
+orders those the same way the instants are ordered, which makes the value usable as a cache key,
+build number or audit label. It stops at one second, so two writes inside the same second compare
+as equal — do not use it as a concurrency token.
+
+For "is this row newer than mine", use `ToVersionStamp()`: it returns `DateTime.Ticks`, which keeps
+100-nanosecond resolution and compares with a single operator. It is still wall clock, so keep the
+comparison on one server; two machines whose clocks drift can hand out stamps in the wrong order.
 
 ### JSON detection has two layers
 
@@ -237,7 +309,7 @@ assets contain no serializer, it also proves the split holds.
 
 | Package | Applies to |
 | --- | --- |
-| `CSharpUtil.Extensions` 0.2.0 | same version as this package |
+| `CSharpUtil.Extensions` 0.3.0 | same version as this package |
 | `Newtonsoft.Json` 13.0.4 | all target frameworks (used by `ConvertTo<T>`) |
 | `System.Text.Json` 8.0.5 | `netstandard2.0` only (`net8.0` ships its own) |
 | `Microsoft.SourceLink.GitHub` 8.0.0 | build only (`PrivateAssets="all"`); maps pdb source paths to the GitHub commit so debuggers can load the original sources |

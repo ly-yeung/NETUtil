@@ -30,6 +30,9 @@ public class ConsumptionTests
                     public static int AsInt(string value) => value.ToInt(0);
                     public static double? AsNullableDouble(string value) => value.ToDouble((double?)null);
                     public static string MaskMobile(string value) => value.MaskMobile();
+                    public static string Normalized(string value) => value.NormalizeSpace();
+                    public static decimal Clamped(decimal value) => value.Clamp(0m, 10m);
+                    public static string Percent(decimal value) => value.ToPercent(1);
                     public static string AsRmb(decimal amount) => amount.ToChineseRmb();
                     public static string AsFileSize(long bytes) => bytes.FormatFileSize();
 
@@ -103,6 +106,7 @@ public class ConsumptionTests
             "net10.0",
             "Program.cs",
             """
+            using CSharpUtil.DateTimeUtil;
             using CSharpUtil.FileUtil;
             using CSharpUtil.NumberUtil;
             using CSharpUtil.StringUtil;
@@ -126,6 +130,10 @@ public class ConsumptionTests
             System.Console.WriteLine("RESULT:safe=" + "CON.txt".IsSafeFileName());
             FileTypeInfo info = "a.png".GetFileInfo();
             System.Console.WriteLine("RESULT:info=" + info.Kind + "/" + info.Category + "/" + info.ContentType);
+            System.Console.WriteLine("RESULT:normalized=" + "  a  b ".NormalizeSpace());
+            System.Console.WriteLine("RESULT:clamped=" + 42m.Clamp(0m, 10m));
+            System.Console.WriteLine("RESULT:percent=" + 0.125m.ToPercent(1));
+            System.Console.WriteLine("RESULT:unix=" + new System.DateTime(2024, 3, 5, 6, 7, 8, System.DateTimeKind.Utc).ToUnixSeconds());
             """,
             executable: true,
             includeJsonPackage: true);
@@ -154,5 +162,9 @@ public class ConsumptionTests
         Assert.Contains("RESULT:ctype=image/png", output);
         Assert.Contains("RESULT:safe=False", output);
         Assert.Contains("RESULT:info=Png/Image/image/png", output);
+        Assert.Contains("RESULT:normalized=a b", output);
+        Assert.Contains("RESULT:clamped=10", output);
+        Assert.Contains("RESULT:percent=12.5%", output);
+        Assert.Contains("RESULT:unix=1709618828", output);
     }
 }

@@ -59,7 +59,6 @@ namespace CSharpUtil.NumberUtil
         /// large values in KB ("5242880.00 KB") instead of switching to MB/GB/TB. At the cap the value is
         /// allowed to overflow its unit ("1024.00 KB"), because moving to the next unit is not permitted.
         /// </param>
-        /// <returns></returns>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="bytes"/> is negative, or <paramref name="maxUnit"/> is not one of the defined units.
         /// </exception>
@@ -150,8 +149,6 @@ namespace CSharpUtil.NumberUtil
         /// Values are rounded to 2 decimals (away from zero) first; negative amounts get a 负 prefix.
         /// Supported range is below 10^16 (10,000 万亿); larger values throw ArgumentOutOfRangeException.
         /// </summary>
-        /// <param name="amount"></param>
-        /// <returns></returns>
         public static string ToChineseRmb(this decimal amount)
         {
             bool negative = amount < 0;
@@ -217,10 +214,9 @@ namespace CSharpUtil.NumberUtil
         /// Rounds to the given number of decimal digits. Defaults to AwayFromZero (financial convention),
         /// which differs from Math.Round's default of ToEven (banker's rounding).
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name="value">Value to round.</param>
         /// <param name="digits">Decimal digits, 0..28.</param>
-        /// <param name="mode"></param>
-        /// <returns></returns>
+        /// <param name="mode">Rounding mode; defaults to AwayFromZero.</param>
         public static decimal RoundTo(this decimal value, int digits, MidpointRounding mode = MidpointRounding.AwayFromZero)
         {
             if (digits < 0 || digits > MaxDecimalDigits)
@@ -229,6 +225,95 @@ namespace CSharpUtil.NumberUtil
             }
 
             return Math.Round(value, digits, mode);
+        }
+
+        /// <summary>
+        /// Constrains the value to [min, max]. Provided for netstandard2.0 consumers, where Math.Clamp does not
+        /// exist, and for decimal, which Math.Clamp never supported.
+        /// </summary>
+        public static int Clamp(this int value, int min, int max)
+        {
+            EnsureRange(min, max);
+            return value < min ? min : value > max ? max : value;
+        }
+
+        /// <summary>
+        /// Constrains the value to [min, max] (see the int overload for why this exists).
+        /// </summary>
+        public static long Clamp(this long value, long min, long max)
+        {
+            EnsureRange(min, max);
+            return value < min ? min : value > max ? max : value;
+        }
+
+        /// <summary>
+        /// Constrains the value to [min, max] (see the int overload for why this exists).
+        /// </summary>
+        public static decimal Clamp(this decimal value, decimal min, decimal max)
+        {
+            EnsureRange(min, max);
+            return value < min ? min : value > max ? max : value;
+        }
+
+        /// <summary>
+        /// Constrains the value to [min, max] (see the int overload for why this exists).
+        /// </summary>
+        public static double Clamp(this double value, double min, double max)
+        {
+            EnsureRange(min, max);
+            return value < min ? min : value > max ? max : value;
+        }
+
+        /// <summary>
+        /// Divides, returning <paramref name="fallback"/> when the divisor is zero instead of letting
+        /// DivideByZeroException (decimal) or infinity (double) escape into report and ratio code.
+        /// </summary>
+        public static decimal SafeDivide(this decimal value, decimal divisor, decimal fallback = 0m)
+        {
+            return divisor == 0m ? fallback : value / divisor;
+        }
+
+        /// <summary>
+        /// Formats the ratio as a percentage with the invariant culture (always '.' as the decimal mark, never
+        /// ','): 0.1234 becomes "12.3%" at the default one digit. Digits are clamped to the 0..4 the formatter
+        /// supports.
+        /// </summary>
+        public static string ToPercent(this decimal value, int decimals = 1)
+        {
+            int digits = ClampDecimals(decimals);
+            return (value * 100m).ToString(FixedFormats[digits], CultureInfo.InvariantCulture) + "%";
+        }
+
+        private static void EnsureRange(int min, int max)
+        {
+            if (min > max)
+            {
+                throw new ArgumentException("min must not be greater than max.", nameof(min));
+            }
+        }
+
+        private static void EnsureRange(long min, long max)
+        {
+            if (min > max)
+            {
+                throw new ArgumentException("min must not be greater than max.", nameof(min));
+            }
+        }
+
+        private static void EnsureRange(decimal min, decimal max)
+        {
+            if (min > max)
+            {
+                throw new ArgumentException("min must not be greater than max.", nameof(min));
+            }
+        }
+
+        private static void EnsureRange(double min, double max)
+        {
+            if (min > max)
+            {
+                throw new ArgumentException("min must not be greater than max.", nameof(min));
+            }
         }
 
         /// <summary>

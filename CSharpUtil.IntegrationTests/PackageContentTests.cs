@@ -98,7 +98,7 @@ public class PackageContentTests
         XDocument nuspec = Nuspec(PackageUnderTest.Instance.CorePackagePath);
 
         // No <dependency> at all: installing the core package must pull nothing from nuget.org.
-        Assert.Empty(nuspec.Descendants().Where(element => element.Name.LocalName == "dependency"));
+        Assert.DoesNotContain(nuspec.Descendants(), element => element.Name.LocalName == "dependency");
 
         string raw = nuspec.ToString();
         Assert.DoesNotContain("Newtonsoft", raw, StringComparison.OrdinalIgnoreCase);
