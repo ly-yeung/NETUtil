@@ -38,6 +38,12 @@ internal static class DotnetCli
         startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
         startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
 
+        // A reused MSBuild node inherits the child process's stdout/stderr handles and keeps those pipes
+        // open after dotnet itself has exited, which makes the ReadToEndAsync calls below block forever.
+        // Every command therefore gets its own build process, never a shared server.
+        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+
         using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start the dotnet CLI.");
 
         // Read both pipes concurrently, otherwise a full buffer deadlocks the child process.
@@ -48,6 +54,13 @@ internal static class DotnetCli
         {
             process.Kill(entireProcessTree: true);
             throw new InvalidOperationException($"dotnet {string.Join(' ', args)} timed out after {TimeoutMilliseconds} ms in '{workingDirectory}'.");
+        }
+
+        // Even with node reuse disabled a stray grandchild could hold a pipe open, so never wait without a bound.
+        if (!stdout.Wait(TimeSpan.FromSeconds(10)) || !stderr.Wait(TimeSpan.FromSeconds(10)))
+        {
+            throw new InvalidOperationException(
+                $"dotnet {string.Join(' ', args)} exited but its output pipes never closed in '{workingDirectory}'.");
         }
 
         string output = stdout.GetAwaiter().GetResult();

@@ -15,6 +15,7 @@ jobs:
     # Trusted Publishing policy. Also serves as the manual approval gate.
     environment: nuget
     runs-on: windows-latest
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
