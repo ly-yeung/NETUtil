@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharpUtil.Tests", "CSharpU
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharpUtil.IntegrationTests", "CSharpUtil.IntegrationTests\CSharpUtil.IntegrationTests.csproj", "{E916F10C-250F-4830-BFA3-C54AA8CEE634}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharpUtil.Json", "CSharpUtil.Json\CSharpUtil.Json.csproj", "{152D8BF6-E367-4FC0-A730-C511AFBC3D32}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{E916F10C-250F-4830-BFA3-C54AA8CEE634}.Release|x64.Build.0 = Release|Any CPU
 		{E916F10C-250F-4830-BFA3-C54AA8CEE634}.Release|x86.ActiveCfg = Release|Any CPU
 		{E916F10C-250F-4830-BFA3-C54AA8CEE634}.Release|x86.Build.0 = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|x64.Build.0 = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Debug|x86.Build.0 = Debug|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|Any CPU.Build.0 = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|x64.ActiveCfg = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|x64.Build.0 = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|x86.ActiveCfg = Release|Any CPU
+		{152D8BF6-E367-4FC0-A730-C511AFBC3D32}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

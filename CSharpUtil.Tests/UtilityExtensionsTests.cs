@@ -376,6 +376,86 @@ public class UtilityExtensionsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => (-1L).FormatFileSize());
     }
 
+    [Fact]
+    public void FormatFileSize_MaxUnitCapsThePromotion()
+    {
+        // Default (PB) keeps the automatic promotion chain untouched.
+        Assert.Equal("1.00 GB", 1073741824L.FormatFileSize());
+        Assert.Equal("1.00 TB", 1099511627776L.FormatFileSize());
+
+        // Capped at KB: no promotion to MB/GB, the value stays in KB.
+        Assert.Equal("1.50 KB", 1536L.FormatFileSize(2, SizeUnit.KB));
+        Assert.Equal("1048576.00 KB", 1073741824L.FormatFileSize(2, SizeUnit.KB));
+
+        // Capped at MB: stops at MB even though GB would be more readable.
+        Assert.Equal("1024.00 MB", 1073741824L.FormatFileSize(2, SizeUnit.MB));
+
+        // Capped at bytes: prints the raw count for every magnitude.
+        Assert.Equal("1536 B", 1536L.FormatFileSize(2, SizeUnit.B));
+        Assert.Equal("1073741824 B", 1073741824L.FormatFileSize(2, SizeUnit.B));
+    }
+
+    [Fact]
+    public void FormatFileSize_AtCapTheBoundaryRoundOverflowsInsteadOfPromoting()
+    {
+        // 1048575 is 1023.999 KB. With a KB cap the unit may not move to MB, so the rounded value is shown
+        // as "1024.00 KB" - the promotion is blocked by the cap, not by the rounding rule.
+        Assert.Equal("1.00 MB", 1048575L.FormatFileSize(2, SizeUnit.MB));
+        Assert.Equal("1024.00 KB", 1048575L.FormatFileSize(2, SizeUnit.KB));
+
+        // Same overflow, no decimals: 1024 KB.
+        Assert.Equal("1024 KB", 1048575L.FormatFileSize(0, SizeUnit.KB));
+    }
+
+    [Fact]
+    public void FormatFileSize_PetabyteAndLongMaxValue()
+    {
+        // 1 PB = 1024^5; the default cap allows the top unit.
+        Assert.Equal("1.00 PB", 1125899906842624L.FormatFileSize());
+
+        // long.MaxValue is 2^63 - 1, a hair under 8192 PB, so two decimals round it up to "8192.00 PB".
+        // PB is the last unit, so the cap blocks the promotion this rounding would otherwise trigger -
+        // the same accepted overflow as "1024.00 KB" under a KB cap.
+        Assert.Equal("8192.00 PB", long.MaxValue.FormatFileSize());
+    }
+
+    [Fact]
+    public void FormatFileSize_UndefinedMaxUnit_Throws()
+    {
+        // The enum is public, so an out-of-range cast must be rejected instead of indexing the symbol array.
+        Assert.Throws<ArgumentOutOfRangeException>(() => 1536L.FormatFileSize(2, (SizeUnit)6));
+        Assert.Throws<ArgumentOutOfRangeException>(() => 1536L.FormatFileSize(2, (SizeUnit)(-1)));
+    }
+
+    [Fact]
+    public void FormatFileSize_KeepsDecimalClampWithMaxUnit()
+    {
+        Assert.Equal("2 KB", 1536L.FormatFileSize(-1, SizeUnit.KB));
+        Assert.Equal("1.5000 KB", 1536L.FormatFileSize(9, SizeUnit.KB));
+    }
+
+    [Fact]
+    public void FormatFileSize_RoundsTiesAwayFromZeroLikeTheDocSays()
+    {
+        // 1.125 MB is an exact tie at two decimals. The printed value must follow the same rule that
+        // decides promotion (away from zero), not the "F2" default of ties-to-even, which would print 1.12.
+        Assert.Equal("1.13 MB", 1179648L.FormatFileSize());
+        Assert.Equal("1.13 MB", 1179648L.FormatFileSize(2, SizeUnit.MB));
+    }
+
+    [Fact]
+    public void FormatFileSize_RendersEveryDeclaredUnitSymbol()
+    {
+        // Guards the UnitSymbols array against drifting away from the public enum: feeding exactly one of
+        // each unit must print that unit's own symbol as the suffix.
+        foreach (SizeUnit unit in Enum.GetValues(typeof(SizeUnit)))
+        {
+            string name = Enum.GetName(typeof(SizeUnit), unit)!;
+            long oneUnit = 1L << (10 * (int)unit);
+            Assert.EndsWith(" " + name, oneUnit.FormatFileSize(2, unit), StringComparison.Ordinal);
+        }
+    }
+
     // ------------------------------------------------------------------
     // NumberUtil.ToChineseRmb
     // ------------------------------------------------------------------

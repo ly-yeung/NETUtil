@@ -25,3 +25,7 @@ coverage*.json
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Other files
+NuGet发布流程.md
+CI-CD部署流程.md

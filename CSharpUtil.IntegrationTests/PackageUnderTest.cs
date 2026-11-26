@@ -6,8 +6,8 @@ using Xunit;
 namespace CSharpUtil.IntegrationTests;
 
 /// <summary>
-/// Packs the library once per test run and creates throw-away consumer projects that restore the
-/// produced .nupkg. This covers the gap unit tests cannot: real NuGet restore, per-TFM asset
+/// Packs the two shipped projects once per run and creates throw-away consumer projects that restore
+/// the produced .nupkg files. This covers the gap unit tests cannot: real NuGet restore, per-TFM asset
 /// selection and the dependency metadata a consumer actually sees.
 /// </summary>
 internal sealed class PackageUnderTest
@@ -20,11 +20,17 @@ internal sealed class PackageUnderTest
 
     public string WorkRoot { get; }
 
-    public string PackageDirectory { get; }
+    public string CorePackageId { get; } = "CSharpUtil.Extensions";
 
-    public string PackagePath { get; }
+    public string JsonPackageId { get; } = "CSharpUtil.Extensions.Json";
 
-    public string PackageId { get; } = "CSharpUtil.Extensions";
+    public string CorePackageDirectory { get; }
+
+    public string JsonPackageDirectory { get; }
+
+    public string CorePackagePath { get; }
+
+    public string JsonPackagePath { get; }
 
     public string Version { get; }
 
@@ -32,40 +38,48 @@ internal sealed class PackageUnderTest
     {
         RepoRoot = LocateRepoRoot();
         WorkRoot = Path.Combine(Path.GetTempPath(), "netutil-it-" + Guid.NewGuid().ToString("N"));
-        PackageDirectory = Path.Combine(WorkRoot, "pkg");
-        Directory.CreateDirectory(PackageDirectory);
+        CorePackageDirectory = Path.Combine(WorkRoot, "pkg", "core");
+        JsonPackageDirectory = Path.Combine(WorkRoot, "pkg", "json");
+        Directory.CreateDirectory(CorePackageDirectory);
+        Directory.CreateDirectory(JsonPackageDirectory);
 
-        DotnetCli.Run(
-            RepoRoot,
-            "pack",
-            Path.Combine(RepoRoot, "CSharpUtil", "CSharpUtil.csproj"),
-            "-c", "Release",
-            "-o", PackageDirectory,
-            "--nologo");
+        Pack(Path.Combine(RepoRoot, "CSharpUtil", "CSharpUtil.csproj"), CorePackageDirectory);
+        Pack(Path.Combine(RepoRoot, "CSharpUtil.Json", "CSharpUtil.Json.csproj"), JsonPackageDirectory);
 
-        string[] packages = Directory.GetFiles(PackageDirectory, "*.nupkg");
-        Assert.Single(packages);
+        CorePackagePath = SinglePackage(CorePackageDirectory);
+        JsonPackagePath = SinglePackage(JsonPackageDirectory);
 
-        PackagePath = packages[0];
-        Version = Path.GetFileNameWithoutExtension(PackagePath).Substring(PackageId.Length + 1);
+        Version = Path.GetFileNameWithoutExtension(CorePackagePath).Substring(CorePackageId.Length + 1);
+        Assert.Equal(Version, Path.GetFileNameWithoutExtension(JsonPackagePath).Substring(JsonPackageId.Length + 1));
 
         // NuGet resolves a package id/version from the global packages folder before looking at any source,
-        // so re-packing the same version leaves consumers with the previously cached copy. Evict it so the
+        // so re-packing the same version leaves consumers with the previously cached copy. Evict both so the
         // consumers below always restore the bits produced by this run.
-        EvictCachedPackage(PackageId, Version);
+        EvictCachedPackage(CorePackageId, Version);
+        EvictCachedPackage(JsonPackageId, Version);
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) => TryDelete(WorkRoot);
     }
 
     /// <summary>
-    /// Writes a consumer project that restores the packed library from a local source.
+    /// Writes a consumer project that restores the packed packages from local sources.
     /// </summary>
-    public string CreateConsumer(string name, string targetFramework, string sourceFileName, string sourceCode, bool executable)
+    public string CreateConsumer(
+        string name,
+        string targetFramework,
+        string sourceFileName,
+        string sourceCode,
+        bool executable,
+        bool includeJsonPackage)
     {
         string directory = Path.Combine(WorkRoot, "consumers", name);
         Directory.CreateDirectory(directory);
 
         string outputType = executable ? "<OutputType>Exe</OutputType>" : string.Empty;
+        string jsonReference = includeJsonPackage
+            ? $"""<PackageReference Include="{JsonPackageId}" Version="{Version}" />"""
+            : string.Empty;
+
         File.WriteAllText(
             Path.Combine(directory, "Consumer.csproj"),
             $"""
@@ -80,25 +94,39 @@ internal sealed class PackageUnderTest
                 {outputType}
               </PropertyGroup>
               <ItemGroup>
-                <PackageReference Include="{PackageId}" Version="{Version}" />
+                <PackageReference Include="{CorePackageId}" Version="{Version}" />
+                {jsonReference}
               </ItemGroup>
             </Project>
             """);
 
-        // Local folder first, then whatever sources the machine already has (nuget.org for the transitive deps).
+        // Local folders first, then whatever sources the machine already has (nuget.org for the transitive deps).
         File.WriteAllText(
             Path.Combine(directory, "NuGet.config"),
             $"""
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
               <packageSources>
-                <add key="local-it" value="{PackageDirectory}" />
+                <add key="local-it-core" value="{CorePackageDirectory}" />
+                <add key="local-it-json" value="{JsonPackageDirectory}" />
               </packageSources>
             </configuration>
             """);
 
         File.WriteAllText(Path.Combine(directory, sourceFileName), sourceCode);
         return directory;
+    }
+
+    private void Pack(string project, string outputDirectory)
+    {
+        DotnetCli.Run(RepoRoot, "pack", project, "-c", "Release", "-o", outputDirectory, "--nologo");
+    }
+
+    private static string SinglePackage(string directory)
+    {
+        string[] packages = Directory.GetFiles(directory, "*.nupkg");
+        Assert.Single(packages);
+        return packages[0];
     }
 
     private static string LocateRepoRoot()
@@ -139,7 +167,8 @@ internal sealed class PackageUnderTest
     }
 
     private static void TryDelete(string path)
-    {        try
+    {
+        try
         {
             if (Directory.Exists(path))
             {

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <PackageId>CSharpUtil.Extensions.Json</PackageId>
+    <!-- Kept in lockstep with CSharpUtil.Extensions: this package depends on that exact version. -->
+    <Version>0.2.0</Version>
+    <Authors>Yeung</Authors>
+    <Description>JSON helpers for CSharpUtil.Extensions: shape checks, strict System.Text.Json validation (string and UTF-8 bytes) and Newtonsoft based object deserialization. Ships the CSharpUtil.StringUtil namespace, so existing using directives keep working.</Description>
+    <PackageTags>json;json-validation;deserialize;utils;extensions</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ly-yeung/NETUtil</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ly-yeung/NETUtil</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Split out of CSharpUtil.Extensions so the core package can stay dependency-free: IsLikeJsonObject/IsLikeJsonArray, IsValidJsonObject/IsValidJsonArray (string and UTF-8 overloads) and ConvertTo&lt;T&gt;/TryConvertTo&lt;T&gt; live here. Namespace unchanged; add this package only when JSON helpers are needed.</PackageReleaseNotes>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pack time this becomes a package dependency on CSharpUtil.Extensions at the same version. -->
+    <ProjectReference Include="..\CSharpUtil\CSharpUtil.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- net8.0 ships System.Text.Json in the shared framework; netstandard2.0 needs the package. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

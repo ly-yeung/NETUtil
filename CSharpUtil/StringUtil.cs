@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using Newtonsoft.Json;
 
 namespace CSharpUtil.StringUtil
 {
@@ -22,53 +19,12 @@ namespace CSharpUtil.StringUtil
         private const NumberStyles FloatStyle = NumberStyles.Float | NumberStyles.AllowThousands;
         private const NumberStyles DecimalStyle = NumberStyles.Number;
 
+        // Reused by SplitTrim: allocating a fresh { ',' } array per call was pure per-call garbage.
+        private static readonly char[] DefaultSeparators = { ',' };
+
         // The nullable overloads' default parameter carries no default value on purpose: if both overloads had
         // one, a call like "value.ToInt()" would be ambiguous (CS0121). With this arrangement a call without
         // arguments binds to the non-nullable overload, and null-on-failure must be requested explicitly.
-        /// <summary>
-        /// Converts a JSON string to an object of type T.
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
-        /// <param name="createNew">If to create a default instance of T if the string is null or empty."></param>
-        /// <returns></returns>
-        public static T ConvertTo<T>(this string value, bool createNew = false) where T : class, new()
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return createNew? new T() : default;
-            }
-            return JsonConvert.DeserializeObject<T>(value);
-        }
-
-        /// <summary>
-        /// Attempts to convert a JSON string to an object of type T and reports failure instead of throwing.
-        /// Use this for text from untrusted sources (request body, config file, queue message); the throwing
-        /// <c>ConvertTo&lt;T&gt;</c> stays the right choice where invalid input should fail fast.
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
-        /// <param name="result">The deserialized instance, or null when conversion failed.</param>
-        /// <returns>True when the text is valid JSON that produced an instance.</returns>
-        public static bool TryConvertTo<T>(this string value, out T result) where T : class, new()
-        {
-            result = null;
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            try
-            {
-                result = JsonConvert.DeserializeObject<T>(value);
-                return result != null;
-            }
-            catch (Newtonsoft.Json.JsonException)
-            {
-                return false;
-            }
-        }
-
         /// <summary>
         /// Converts a string to an integer. If the string is null or empty, returns the specified default value.
         /// </summary>
@@ -486,6 +442,15 @@ namespace CSharpUtil.StringUtil
         }
 
         /// <summary>
+        /// Per-type facts about T, computed once. Type.IsDefined is a reflection call, and asking for the
+        /// FlagsAttribute on every conversion showed up as measurable overhead in a tight parse loop.
+        /// </summary>
+        private static class EnumMetadata<T> where T : struct, Enum
+        {
+            internal static readonly bool IsFlags = typeof(T).IsDefined(typeof(FlagsAttribute), false);
+        }
+
+        /// <summary>
         /// Shared enum parsing rule. Enum.TryParse alone is not enough: it happily turns "99" into a value
         /// that no member defines, which usually means the input is corrupt rather than intentional.
         /// </summary>
@@ -497,17 +462,33 @@ namespace CSharpUtil.StringUtil
                 return false;
             }
 
-            if (!Enum.TryParse(value.Trim(), true, out T parsed))
+            string trimmed = value.Trim();
+            if (!Enum.TryParse(trimmed, true, out T parsed))
             {
                 return false;
             }
 
             // Flags enums legitimately hold combinations, so any parsed bit pattern is accepted there.
-            if (Enum.IsDefined(typeof(T), parsed) || typeof(T).IsDefined(typeof(FlagsAttribute), false))
+            if (EnumMetadata<T>.IsFlags)
             {
                 result = parsed;
                 return true;
             }
+
+#if NET8_0_OR_GREATER
+            // The generic overload checks the value without boxing it.
+            if (Enum.IsDefined<T>(parsed))
+            {
+                result = parsed;
+                return true;
+            }
+#else
+            if (Enum.IsDefined(typeof(T), parsed))
+            {
+                result = parsed;
+                return true;
+            }
+#endif
 
             return false;
         }
@@ -615,14 +596,24 @@ namespace CSharpUtil.StringUtil
                 return value;
             }
 
+            // Clamping before the sum also keeps "keepStart + keepEnd" from overflowing into a negative
+            // value, which would skip the full-mask branch and leak the original text.
             if (keepStart < 0)
             {
                 keepStart = 0;
+            }
+            else if (keepStart > value.Length)
+            {
+                keepStart = value.Length;
             }
 
             if (keepEnd < 0)
             {
                 keepEnd = 0;
+            }
+            else if (keepEnd > value.Length)
+            {
+                keepEnd = value.Length;
             }
 
             if (keepStart + keepEnd >= value.Length)
@@ -630,9 +621,16 @@ namespace CSharpUtil.StringUtil
                 return new string(maskChar, value.Length);
             }
 
-            return value.Substring(0, keepStart)
-                + new string(maskChar, value.Length - keepStart - keepEnd)
-                + value.Substring(value.Length - keepEnd);
+            // Mask in a single buffer: three Substrings plus a concatenation produced four strings
+            // for one masked value.
+            char[] chars = value.ToCharArray();
+            int end = value.Length - keepEnd;
+            for (int i = keepStart; i < end; i++)
+            {
+                chars[i] = maskChar;
+            }
+
+            return new string(chars);
         }
 
         /// <summary>
@@ -675,24 +673,16 @@ namespace CSharpUtil.StringUtil
                 return value.Mask(1, 0);
             }
 
-            string local = value.Substring(0, at);
-            string domain = value.Substring(at);
-
-            string maskedLocal;
-            if (local.Length <= 1)
+            // Mask the local part in place. The previous version built two Substrings, a masked local
+            // part and two concatenations, i.e. six strings for one masked address.
+            char[] chars = value.ToCharArray();
+            int keep = at <= 1 ? 0 : (at == 2 ? 1 : 2);
+            for (int i = keep; i < at; i++)
             {
-                maskedLocal = "*";
-            }
-            else if (local.Length == 2)
-            {
-                maskedLocal = local[0] + "*";
-            }
-            else
-            {
-                maskedLocal = local.Substring(0, 2) + new string('*', local.Length - 2);
+                chars[i] = '*';
             }
 
-            return maskedLocal + domain;
+            return new string(chars);
         }
 
         /// <summary>
@@ -709,18 +699,39 @@ namespace CSharpUtil.StringUtil
                 return new string[0];
             }
 
-            char[] actual = separators == null || separators.Length == 0 ? new[] { ',' } : separators;
+            char[] actual = separators == null || separators.Length == 0 ? DefaultSeparators : separators;
+            List<string> result = new List<string>();
 
-            // RemoveEmptyEntries only drops truly empty parts, so whitespace-only parts are filtered below.
-            string[] parts = value.Split(actual, StringSplitOptions.RemoveEmptyEntries);
-            List<string> result = new List<string>(parts.Length);
-            foreach (string part in parts)
+            // One scan instead of Split + List + a second Trim per part: string.Split materialises every
+            // raw part first, and each part then cost a Trim allocation before being copied again.
+            // Here each kept part is trimmed by index and copied exactly once.
+            int index = 0;
+            while (index <= value.Length)
             {
-                string trimmed = part.Trim();
-                if (trimmed.Length > 0)
+                int end = index;
+                while (end < value.Length && Array.IndexOf(actual, value[end]) < 0)
                 {
-                    result.Add(trimmed);
+                    end++;
                 }
+
+                int start = index;
+                int stop = end;
+                while (start < stop && char.IsWhiteSpace(value[start]))
+                {
+                    start++;
+                }
+
+                while (stop > start && char.IsWhiteSpace(value[stop - 1]))
+                {
+                    stop--;
+                }
+
+                if (stop > start)
+                {
+                    result.Add(value.Substring(start, stop - start));
+                }
+
+                index = end + 1;
             }
 
             return result.ToArray();
@@ -765,150 +776,6 @@ namespace CSharpUtil.StringUtil
 
             string head = value.Substring(0, cut);
             return suffix == null ? head : head + suffix;
-        }
-
-        /// <summary>
-        /// Determines whether a string looks like a JSON object, i.e. its first non-whitespace character is '{'.
-        /// This is a shape check only: "{bad json" also returns true. Use <see cref="IsValidJsonObject(string)"/>
-        /// when you need to know whether the text is really valid JSON. Costs O(1) for typical input and allocates nothing.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        public static bool IsLikeJsonObject(this string value)
-        {
-            return FirstMeaningfulChar(value) == '{';
-        }
-
-        /// <summary>
-        /// Determines whether a string looks like a JSON array, i.e. its first non-whitespace character is '['.
-        /// Shape check only; see <see cref="IsValidJsonArray(string)"/> for real validation.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        public static bool IsLikeJsonArray(this string value)
-        {
-            return FirstMeaningfulChar(value) == '[';
-        }
-
-        /// <summary>
-        /// Returns the first character that is neither a BOM nor ASCII whitespace, or '\0' when there is none.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        private static char FirstMeaningfulChar(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return '\0';
-            }
-
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                // 只跳过 BOM 与 ASCII 空白：与 JSON 语法一致，也避免 char.IsWhiteSpace 按文化判定的开销
-                if (c == '\uFEFF' || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f')
-                {
-                    continue;
-                }
-                return c;
-            }
-
-            return '\0';
-        }
-
-        /// <summary>
-        /// Determines whether a string is a syntactically valid JSON object, using the strict System.Text.Json rules
-        /// (RFC 8259): single-quoted strings, unquoted property names, trailing commas and NaN are all rejected.
-        /// Note this is stricter than Newtonsoft.Json, so only use it for input that follows the same rules.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        public static bool IsValidJsonObject(this string value)
-        {
-            return IsValidJsonDocument(value, JsonTokenType.StartObject);
-        }
-
-        /// <summary>
-        /// Determines whether a string is a syntactically valid JSON array. See <see cref="IsValidJsonObject(string)"/>.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        public static bool IsValidJsonArray(this string value)
-        {
-            return IsValidJsonDocument(value, JsonTokenType.StartArray);
-        }
-
-        /// <summary>
-        /// Determines whether the UTF-8 bytes are a syntactically valid JSON object.
-        /// Use this overload when the input is already bytes (request body, file, BLOB): it validates without allocating.
-        /// </summary>
-        /// <param name="utf8Json"></param>
-        /// <returns></returns>
-        public static bool IsValidJsonObject(this ReadOnlySpan<byte> utf8Json)
-        {
-            return IsValidJsonDocument(utf8Json, JsonTokenType.StartObject);
-        }
-
-        /// <summary>
-        /// Determines whether the UTF-8 bytes are a syntactically valid JSON array.
-        /// </summary>
-        /// <param name="utf8Json"></param>
-        /// <returns></returns>
-        public static bool IsValidJsonArray(this ReadOnlySpan<byte> utf8Json)
-        {
-            return IsValidJsonDocument(utf8Json, JsonTokenType.StartArray);
-        }
-
-        /// <summary>
-        /// Transcodes the text to UTF-8 and validates it. The transcode is the only allocation on this path.
-        /// </summary>
-        private static bool IsValidJsonDocument(string value, JsonTokenType expectedRoot)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return false;
-            }
-
-            // U+FEFF（UTF-8 BOM 解码后的字符）不被 JSON 语法允许，先去掉再校验
-            if (value[0] == '\uFEFF')
-            {
-                value = value.Substring(1);
-            }
-
-            return IsValidJsonDocument(Encoding.UTF8.GetBytes(value), expectedRoot);
-        }
-
-        /// <summary>
-        /// Walks every token with <see cref="Utf8JsonReader"/> and confirms the root token type.
-        /// Allocates nothing; any structural error, bad escape or trailing content surfaces as JsonException.
-        /// </summary>
-        private static bool IsValidJsonDocument(ReadOnlySpan<byte> utf8Json, JsonTokenType expectedRoot)
-        {
-            try
-            {
-                Utf8JsonReader reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
-                {
-                    MaxDepth = 64,
-                    CommentHandling = JsonCommentHandling.Disallow,
-                    AllowTrailingCommas = false
-                });
-
-                if (!reader.Read() || reader.TokenType != expectedRoot)
-                {
-                    return false;
-                }
-
-                while (reader.Read())
-                {
-                    // 遍历全部 token，不构建任何对象模型
-                }
-
-                return true;
-            }
-            catch (System.Text.Json.JsonException)
-            {
-                return false;
-            }
         }
     }
 }

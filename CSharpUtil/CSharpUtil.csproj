@@ -3,34 +3,35 @@
   <PropertyGroup>
 <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
     <PackageId>CSharpUtil.Extensions</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Yeung</Authors>
-    <Description>Common .NET tools and helpers</Description>
-    <PackageTags>utils;helper</PackageTags>
+    <Description>Extension-method helpers for strings, numbers, objects and file names: culture-invariant parsing, RMB and byte-size formatting, safe file name and path checks, file kind and media type lookup. JSON helpers ship separately in CSharpUtil.Extensions.Json.</Description>
+    <PackageTags>utils;helper;extensions;parsing;file;path;filename;masking;formatting</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/ly-yeung/NETUtil</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ly-yeung/NETUtil</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Initial release: string/number/object extension helpers, culture-invariant parsing, two-layer JSON detection.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.2.0 adds CSharpUtil.FileUtil: path and file name helpers, file kind/category, media type lookup and upload name checks, plus FileTypeInfo/GetFileInfo which resolves kind, category, media type and the dangerous-upload flag in a single lookup. The JSON helpers (IsLikeJson*, IsValidJson*, ConvertTo&lt;T&gt;, TryConvertTo&lt;T&gt;) moved to the new CSharpUtil.Extensions.Json package, so this package now has no third-party dependency at all.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Nothing to declare, so drop the empty per-TFM dependency groups from the nuspec. -->
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Lets the symbol package point at the exact commit so debuggers can step into the sources on GitHub. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
+  <!-- No third-party dependencies on purpose: JSON helpers live in CSharpUtil.Extensions.Json. -->
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Ship the repository README inside the package so nuget.org renders it on the package page. -->
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\LICENSE" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
-  <!-- net8.0 自带 System.Text.Json；只有 netstandard2.0 目标需要显式引用，避免 net8.0 目标引入重复程序集 -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
 </Project>

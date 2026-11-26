@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CSharpUtil\CSharpUtil.csproj" />
+    <ProjectReference Include="..\CSharpUtil.Json\CSharpUtil.Json.csproj" />
   </ItemGroup>
 
 </Project>

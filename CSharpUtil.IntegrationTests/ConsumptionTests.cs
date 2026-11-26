@@ -4,39 +4,47 @@ using Xunit;
 namespace CSharpUtil.IntegrationTests;
 
 /// <summary>
-/// End-to-end consumption tests: a throw-away project restores the packed .nupkg, compiles against
-/// the selected TFM asset and, for the runnable one, executes the helpers to prove the package works
-/// outside its own build tree.
+/// End-to-end consumption tests: throw-away projects restore the packed .nupkg files, compile against
+/// the selected TFM asset and, for the runnable ones, execute the helpers to prove the packages work
+/// outside their own build tree.
 /// </summary>
 public class ConsumptionTests
 {
     [Fact]
-    public void NetStandard20Consumer_CompilesAgainstNetStandardAsset()
+    public void CoreOnlyConsumer_CompilesOnNetStandard20AndPullsNoThirdPartyPackages()
     {
         string directory = PackageUnderTest.Instance.CreateConsumer(
-            "ns20",
+            "ns20-core",
             "netstandard2.0",
             "Api.cs",
             """
+            using CSharpUtil.FileUtil;
             using CSharpUtil.NumberUtil;
+            using CSharpUtil.ObjectUtil;
             using CSharpUtil.StringUtil;
 
             namespace Consumer
             {
                 public static class Api
                 {
-                    public static bool IsJsonObject(string value) => value.IsValidJsonObject();
-                    public static bool LooksLikeJsonObject(string value) => value.IsLikeJsonObject();
                     public static int AsInt(string value) => value.ToInt(0);
-                    public static double AsDouble(string value) => value.ToDouble(0);
                     public static double? AsNullableDouble(string value) => value.ToDouble((double?)null);
                     public static string MaskMobile(string value) => value.MaskMobile();
                     public static string AsRmb(decimal amount) => amount.ToChineseRmb();
                     public static string AsFileSize(long bytes) => bytes.FormatFileSize();
+
+                    public static string Extension(string value) => value.GetExtension();
+                    public static string CleanName(string value) => value.GetSafeFileName();
+                    public static string MediaType(string value) => value.GetContentType();
+                    public static FileKind KindOf(string value) => value.GetFileKind();
+                    public static FileTypeInfo InfoOf(string value) => value.GetFileInfo();
+
+                    public static T Cast<T>(object value) => value.CopyTo<T>();
                 }
             }
             """,
-            executable: false);
+            executable: false,
+            includeJsonPackage: false);
 
         DotnetCli.Run(directory, "build", Path.Combine(directory, "Consumer.csproj"), "-c", "Release", "--nologo");
 
@@ -44,6 +52,47 @@ public class ConsumptionTests
         string assets = File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json"));
         Assert.Contains("CSharpUtil.Extensions", assets);
         Assert.Contains("netstandard2.0", assets);
+
+        // The whole point of the split: a consumer of the core package must not drag a JSON serializer in.
+        Assert.DoesNotContain("newtonsoft.json", assets, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("system.text.json", assets, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void JsonConsumer_CompilesOnNetStandard20()
+    {
+        string directory = PackageUnderTest.Instance.CreateConsumer(
+            "ns20-json",
+            "netstandard2.0",
+            "Api.cs",
+            """
+            using CSharpUtil.StringUtil;
+
+            namespace Consumer
+            {
+                public sealed class Payload
+                {
+                    public int Id { get; set; }
+                    public string Name { get; set; } = string.Empty;
+                }
+
+                public static class Api
+                {
+                    public static bool IsJsonObject(string value) => value.IsValidJsonObject();
+                    public static bool LooksLikeJsonObject(string value) => value.IsLikeJsonObject();
+                    public static Payload Deserialize(string value) => value.ConvertTo<Payload>();
+                    public static bool TryDeserialize(string value, out Payload result) => value.TryConvertTo(out result);
+                }
+            }
+            """,
+            executable: false,
+            includeJsonPackage: true);
+
+        DotnetCli.Run(directory, "build", Path.Combine(directory, "Consumer.csproj"), "-c", "Release", "--nologo");
+
+        string assets = File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json"));
+        Assert.Contains("CSharpUtil.Extensions.Json", assets);
+        Assert.Contains("newtonsoft.json", assets, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -54,6 +103,7 @@ public class ConsumptionTests
             "net10.0",
             "Program.cs",
             """
+            using CSharpUtil.FileUtil;
             using CSharpUtil.NumberUtil;
             using CSharpUtil.StringUtil;
 
@@ -69,8 +119,16 @@ public class ConsumptionTests
             System.Console.WriteLine("RESULT:mask=" + "13800138000".MaskMobile());
             System.Console.WriteLine("RESULT:rmb=" + 1234.56m.ToChineseRmb());
             System.Console.WriteLine("RESULT:size=" + 1536L.FormatFileSize());
+            System.Console.WriteLine("RESULT:capSize=" + 1073741824L.FormatFileSize(2, SizeUnit.KB));
+            System.Console.WriteLine("RESULT:ext=" + "C:\\docs\\Report.PDF".GetExtension());
+            System.Console.WriteLine("RESULT:kind=" + "a.PNG".GetFileKind());
+            System.Console.WriteLine("RESULT:ctype=" + "a.png".GetContentType());
+            System.Console.WriteLine("RESULT:safe=" + "CON.txt".IsSafeFileName());
+            FileTypeInfo info = "a.png".GetFileInfo();
+            System.Console.WriteLine("RESULT:info=" + info.Kind + "/" + info.Category + "/" + info.ContentType);
             """,
-            executable: true);
+            executable: true,
+            includeJsonPackage: true);
 
         string output = DotnetCli.Run(
             directory,
@@ -89,5 +147,12 @@ public class ConsumptionTests
         Assert.Contains("RESULT:mask=138****8000", output);
         Assert.Contains("RESULT:rmb=壹仟贰佰叁拾肆元伍角陆分", output);
         Assert.Contains("RESULT:size=1.50 KB", output);
+        // Exercises the public SizeUnit enum through the packaged assembly, not just via a project reference.
+        Assert.Contains("RESULT:capSize=1048576.00 KB", output);
+        Assert.Contains("RESULT:ext=.pdf", output);
+        Assert.Contains("RESULT:kind=Png", output);
+        Assert.Contains("RESULT:ctype=image/png", output);
+        Assert.Contains("RESULT:safe=False", output);
+        Assert.Contains("RESULT:info=Png/Image/image/png", output);
     }
 }
