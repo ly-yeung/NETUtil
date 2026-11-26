@@ -1,0 +1,66 @@
+name: publish
+
+# Only tag pushes publish. Ordinary commits go through ci.yml and never touch nuget.org.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    # Must stay identical to the Environment configured on the nuget.org
+    # Trusted Publishing policy. Also serves as the manual approval gate.
+    environment: nuget
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Fail early when the tag and the two csproj versions disagree, so a
+      # mistyped tag can never push the wrong version.
+      - name: Verify tag matches csproj versions
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}' -replace '^v', ''
+          $core = (Select-String -Path CSharpUtil/CSharpUtil.csproj -Pattern '<Version>([^<]+)</Version>').Matches[0].Groups[1].Value
+          $json = (Select-String -Path CSharpUtil.Json/CSharpUtil.Json.csproj -Pattern '<Version>([^<]+)</Version>').Matches[0].Groups[1].Value
+          Write-Host "tag=$tag core=$core json=$json"
+          if ($core -ne $tag -or $json -ne $tag) {
+            throw "tag '$tag' does not match csproj versions (core='$core', json='$json')"
+          }
+
+      - name: Test
+        run: dotnet test NETUtil.sln -c Release
+
+      # Pack both packages unconditionally: the Json package depends on the
+      # core package at the same version, so both must ship together.
+      - name: Pack
+        run: |
+          dotnet pack CSharpUtil/CSharpUtil.csproj -c Release -o dist
+          dotnet pack CSharpUtil.Json/CSharpUtil.Json.csproj -c Release -o dist
+
+      # OIDC exchange: no long-lived secret in the repository. The short-lived
+      # key expires in about one hour, which is why login and push share a job.
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: Andy_yeung
+
+      - name: Push
+        shell: pwsh
+        env:
+          NUGET_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $v = '${{ github.ref_name }}' -replace '^v', ''
+          $src = 'https://api.nuget.org/v3/index.json'
+          # Core first: consumers of the Json package restore it as a dependency.
+          dotnet nuget push "dist/CSharpUtil.Extensions.$v.nupkg" --api-key $env:NUGET_KEY --source $src --skip-duplicate
+          dotnet nuget push "dist/CSharpUtil.Extensions.Json.$v.nupkg" --api-key $env:NUGET_KEY --source $src --skip-duplicate
